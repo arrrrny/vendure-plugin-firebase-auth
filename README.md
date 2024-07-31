@@ -28,7 +28,8 @@ const config = {
     FirebaseAuthPlugin.init({
       serviceAccount: process.env.FIREBASE_SERVICE_ACCOUNT,
       databaseURL: process.env.FIREBASE_DATABASE_URL,
-      allowNewUserRegistration: true,
+      registerCustomer: true, //if email is present, create customer in Vendure
+      registerUser: true, //create user in Vendure without email
     }),
     // other plugins...
   ],
