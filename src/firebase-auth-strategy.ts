@@ -79,7 +79,7 @@ export class FirebaseAuthStrategy
         }
         return false;
       } else {
-        throw new HttpException("Invalid User Id", HttpStatus.UNAUTHORIZED);
+        throw new Error("Invalid User Id");
       }
     } catch (error) {
       if (error instanceof Error) {
@@ -119,6 +119,6 @@ export class FirebaseAuthStrategy
     }
   }
   destroy() {
-    admin.app().delete();
+    if (admin.apps.length > 0) admin.app().delete();
   }
 }
