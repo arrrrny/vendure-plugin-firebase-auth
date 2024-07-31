@@ -5,5 +5,6 @@
 export interface FirebaseAuthOptions {
   serviceAccount: string;
   databaseURL: string;
-  allowNewUserRegistration: boolean;
+  registerCustomer: boolean;
+  registerUser: boolean;
 }

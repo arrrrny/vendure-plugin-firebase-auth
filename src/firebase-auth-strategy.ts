@@ -67,31 +67,34 @@ export class FirebaseAuthStrategy
         // });
         if (user != null) {
           return user;
-        } else if (decodedIdToken.email != null) {
-          return await this.externalAuthenticationService.createCustomerAndUser(
-            ctx,
-            {
-              strategy: this.name,
-              externalIdentifier: decodedIdToken.uid,
-              verified: decodedIdToken.email_verified || false,
-              emailAddress: decodedIdToken.email,
-            },
-          );
-        } else if (this.options.allowNewUserRegistration) {
-          const newUser = new User();
-          newUser.identifier = decodedIdToken.uid;
-          newUser.verified = false;
-          const firebaseAuthMethod = await this.connection!.getRepository(
-            ctx,
-            ExternalAuthenticationMethod,
-          ).save(
-            new ExternalAuthenticationMethod({
-              strategy: this.name,
-              externalIdentifier: decodedIdToken.uid,
-            }),
-          );
-          newUser.authenticationMethods = [firebaseAuthMethod];
-          return await this.connection.getRepository(ctx, User).save(newUser);
+        } else {
+          if (decodedIdToken.email != null && this.options.registerCustomer) {
+            return await this.externalAuthenticationService.createCustomerAndUser(
+              ctx,
+              {
+                strategy: this.name,
+                externalIdentifier: decodedIdToken.uid,
+                verified: decodedIdToken.email_verified || false,
+                emailAddress: decodedIdToken.email,
+              },
+            );
+          }
+          if (this.options.registerUser) {
+            const newUser = new User();
+            newUser.identifier = decodedIdToken.uid;
+            newUser.verified = false;
+            const firebaseAuthMethod = await this.connection!.getRepository(
+              ctx,
+              ExternalAuthenticationMethod,
+            ).save(
+              new ExternalAuthenticationMethod({
+                strategy: this.name,
+                externalIdentifier: decodedIdToken.uid,
+              }),
+            );
+            newUser.authenticationMethods = [firebaseAuthMethod];
+            return await this.connection.getRepository(ctx, User).save(newUser);
+          }
         }
         return false;
       } else {
