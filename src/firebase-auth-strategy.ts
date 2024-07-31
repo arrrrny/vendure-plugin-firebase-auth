@@ -8,6 +8,7 @@ import {
   TransactionalConnection,
   Logger,
   User,
+  ExternalAuthenticationService,
 } from "@vendure/core";
 import * as admin from "firebase-admin";
 import { FirebaseAuthOptions } from "./types";
@@ -30,6 +31,7 @@ export class FirebaseAuthStrategy
   private connection: TransactionalConnection;
   private options: FirebaseAuthOptions;
   readonly name = "firebase";
+  private externalAuthenticationService: ExternalAuthenticationService;
 
   constructor() {}
   defineInputType(): DocumentNode {
@@ -52,19 +54,33 @@ export class FirebaseAuthStrategy
       const decodedIdToken: DecodedIdToken = await admin
         .auth()
         .verifyIdToken(data.jwt);
-
       if (decodedIdToken.uid == data.uid) {
-        const user = await this.connection.getRepository(ctx, User).findOne({
-          where: {
-            identifier: decodedIdToken.uid,
-          },
-        });
+        const user = await this.externalAuthenticationService.findUser(
+          ctx,
+          this.name,
+          decodedIdToken.uid,
+        );
+        // const user = await this.connection.getRepository(ctx, User).findOne({
+        //   where: {
+        //     identifier: decodedIdToken.uid,
+        //   },
+        // });
         if (user != null) {
           return user;
+        } else if (decodedIdToken.email != null) {
+          return await this.externalAuthenticationService.createCustomerAndUser(
+            ctx,
+            {
+              strategy: this.name,
+              externalIdentifier: decodedIdToken.uid,
+              verified: decodedIdToken.email_verified || false,
+              emailAddress: decodedIdToken.email,
+            },
+          );
         } else if (this.options.allowNewUserRegistration) {
           const newUser = new User();
           newUser.identifier = decodedIdToken.uid;
-          newUser.verified = true;
+          newUser.verified = false;
           const firebaseAuthMethod = await this.connection!.getRepository(
             ctx,
             ExternalAuthenticationMethod,
@@ -102,6 +118,10 @@ export class FirebaseAuthStrategy
   // }
 
   init(injector: Injector) {
+    this.externalAuthenticationService = injector.get(
+      ExternalAuthenticationService,
+    );
+
     this.connection = injector.get(TransactionalConnection);
     this.options = injector.get(FIREBASE_AUTH_PLUGIN_OPTIONS);
 
