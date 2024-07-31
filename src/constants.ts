@@ -1,2 +1,4 @@
-export const loggerCtx = "ExamplePlugin";
-export const PLUGIN_INIT_OPTIONS = Symbol("PLUGIN_INIT_OPTIONS");
+export const FIREBASE_AUTH_PLUGIN_OPTIONS = Symbol(
+  "FIREBASE_AUTH_PLUGIN_OPTIONS",
+);
+export const loggerCtx = "FirebaseAuthPlugin";
