@@ -1,3 +1,6 @@
+##0.3.3
+Added compability with Vendure 3.0.0
+
 ## 0.3.2
 ### Features
 - Created FirebaseUser Role in Vendure and automatically assign the

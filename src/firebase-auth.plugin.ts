@@ -29,7 +29,7 @@ import { shopApiExtensions } from "./api/api-extensions";
     schema: shopApiExtensions,
     resolvers: [ExternalAuthSessionResover],
   },
-  compatibility: "^2.0.0",
+  compatibility: ">=2.0.0",
 })
 export class FirebaseAuthPlugin {
   static options: FirebaseAuthOptions;
