@@ -90,7 +90,7 @@ export class FirebaseAuthStrategy
         if (!firebaseRole) {
           firebaseRole = new Role();
           firebaseRole.code = "firebase-user";
-          firebaseRole.description = "Firebase Authenticated";
+          firebaseRole.description = "Firebase User";
           firebaseRole.permissions = [
             Permission.Authenticated,
             firebaseUser.Permission,

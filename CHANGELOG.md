@@ -1,4 +1,4 @@
-## 0.3.1
+## 0.3.2
 ### Features
 - Created FirebaseUser Role in Vendure and automatically assign the
 newly created user to the FirebaseUser role.This role has Permission.Authenticated
