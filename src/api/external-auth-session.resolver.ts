@@ -8,25 +8,15 @@ import {
   ExternalAuthenticationService,
   ID,
   Logger,
-  Order,
-  OrderService,
+  Permission,
   RequestContext,
   SessionService,
-  Transaction,
-  UserInputError,
-  UserService,
   idsAreEqual,
 } from "@vendure/core";
 import { InvalidCredentialsError } from "@vendure/core/dist/common/error/generated-graphql-shop-errors";
 import { AuthenticatedSessionResponse } from "../types";
+import { firebaseUser } from "../constants";
 
-// declare module "@vendure/core/dist/entity/custom-entity-fields" {
-//   interface CustomOrderFields {
-//     userExternalIdentifier: string;
-//     userAuthMethod: string;
-//   }
-// }
-//
 const loggerCtx = "FirebaseAuthStrategy";
 
 @Resolver()
@@ -37,11 +27,10 @@ export class ExternalAuthSessionResover {
   ) {}
 
   @Query()
-  // @Allow(Permission.Authenticated, Permission.Owner)
+  @Allow(firebaseUser.Permission, Permission.Authenticated)
   async getSession(
     @Ctx() ctx: RequestContext,
   ): Promise<AuthenticatedSessionResponse> {
-
     try {
       console.log(ctx.session?.token);
       if (ctx.session?.token == null) {
@@ -51,8 +40,10 @@ export class ExternalAuthSessionResover {
       }
 
       Logger.info("Getting session from token");
-      const session = await this.sessionService.getSessionFromToken(ctx.session?.token);
-      console.log(session);
+      const session = await this.sessionService.getSessionFromToken(
+        ctx.session?.token,
+      );
+
       if (session == null) {
         throw new InvalidCredentialsError({
           authenticationError: "No valid session found",
@@ -71,10 +62,10 @@ export class ExternalAuthSessionResover {
           `Error authenticating with Firebase login: ${error.message}`,
           loggerCtx,
         );
-      }else if (error instanceof ErrorResult){
+      } else if (error instanceof ErrorResult) {
         // return error;
       }
-      console.log(error);
+      // Logger.info(error);
       throw error;
     }
   }

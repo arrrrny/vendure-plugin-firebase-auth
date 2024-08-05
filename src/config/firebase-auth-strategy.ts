@@ -9,14 +9,18 @@ import {
   Logger,
   User,
   ExternalAuthenticationService,
+  extractSessionToken,
   SessionService,
+  Role,
+  Permission,
+  RoleService,
 } from "@vendure/core";
 import * as admin from "firebase-admin";
-import { FirebaseAuthOptions } from "../types";
 import { DocumentNode } from "graphql";
 import gql from "graphql-tag";
 import { DecodedIdToken } from "firebase-admin/auth";
-import { FIREBASE_AUTH_PLUGIN_OPTIONS } from "../constants";
+import { FirebaseAuthOptions } from "../types";
+import { FIREBASE_AUTH_PLUGIN_OPTIONS, firebaseUser } from "../constants";
 
 export interface FirebaseAuthData {
   jwt: string;
@@ -34,7 +38,7 @@ export class FirebaseAuthStrategy
   readonly name = "firebase";
   private externalAuthenticationService: ExternalAuthenticationService;
   private sessionService: SessionService;
-
+  private roleService: RoleService;
   constructor() {}
   defineInputType(): DocumentNode {
     return gql`
@@ -75,43 +79,75 @@ export class FirebaseAuthStrategy
         Logger.info("User found in database. Returning user.");
         return user;
       }
-      if (this.options.registerCustomer) {
-        const firebaseUser = await admin.auth().getUser(data.uid);
+      if (!ctx.channelId) {
+        throw new Error("No channel found, cant create a user or customer");
+      }
+      if (this.options.registerUser || this.options.registerCustomer) {
+        const roleRepository = this.connection.getRepository(ctx, Role);
+        let firebaseRole = await roleRepository.findOne({
+          where: { code: "firebase-user" },
+        });
+        if (!firebaseRole) {
+          firebaseRole = new Role();
+          firebaseRole.code = "firebase-user";
+          firebaseRole.description = "Firebase Authenticated";
+          firebaseRole.permissions = [
+            Permission.Authenticated,
+            firebaseUser.Permission,
+          ];
 
-        if (
-          firebaseUser.email &&
-          firebaseUser.displayName &&
-          firebaseUser.displayName.split(" ").length > 1
-        ) {
-          return await this.externalAuthenticationService.createCustomerAndUser(
+          firebaseRole = await roleRepository.save(firebaseRole);
+          await this.roleService.assignRoleToChannel(
             ctx,
-            {
+            firebaseRole.id,
+            ctx.channelId,
+          );
+          Logger.info(`FirebaseUser role created`, loggerCtx);
+        } else {
+          Logger.info(`FirebaseUser role already exists`, loggerCtx);
+        }
+        if (this.options.registerCustomer) {
+          const firebaseUser = await admin.auth().getUser(data.uid);
+
+          if (
+            firebaseUser.email &&
+            firebaseUser.displayName &&
+            firebaseUser.displayName.split(" ").length > 1
+          ) {
+            const newUser =
+              await this.externalAuthenticationService.createCustomerAndUser(
+                ctx,
+                {
+                  strategy: this.name,
+                  externalIdentifier: decodedIdToken.uid,
+                  verified: firebaseUser.emailVerified || false,
+                  emailAddress: firebaseUser.email,
+                  firstName: firebaseUser.displayName.split(" ")[0],
+                  lastName: firebaseUser.displayName.split(" ")[1],
+                },
+              );
+            newUser.roles.push(firebaseRole);
+            return await this.connection.getRepository(ctx, User).save(newUser);
+          }
+        }
+        if (this.options.registerUser) {
+          const newUser = new User();
+
+          newUser.identifier = decodedIdToken.uid;
+          const firebaseAuthMethod = await this.connection!.getRepository(
+            ctx,
+            ExternalAuthenticationMethod,
+          ).save(
+            new ExternalAuthenticationMethod({
               strategy: this.name,
               externalIdentifier: decodedIdToken.uid,
-              verified: firebaseUser.emailVerified || false,
-              emailAddress: firebaseUser.email,
-              firstName: firebaseUser.displayName.split(" ")[0],
-              lastName: firebaseUser.displayName.split(" ")[1],
-            },
+            }),
           );
+          newUser.roles = [firebaseRole];
+          newUser.authenticationMethods = [firebaseAuthMethod];
+          return await this.connection.getRepository(ctx, User).save(newUser);
         }
       }
-      if (this.options.registerUser) {
-        const newUser = new User();
-        newUser.identifier = decodedIdToken.uid;
-        const firebaseAuthMethod = await this.connection!.getRepository(
-          ctx,
-          ExternalAuthenticationMethod,
-        ).save(
-          new ExternalAuthenticationMethod({
-            strategy: this.name,
-            externalIdentifier: decodedIdToken.uid,
-          }),
-        );
-        newUser.authenticationMethods = [firebaseAuthMethod];
-        return await this.connection.getRepository(ctx, User).save(newUser);
-      }
-
       return false;
     } catch (error) {
       if (error instanceof Error) {
@@ -129,6 +165,7 @@ export class FirebaseAuthStrategy
       return false;
     }
   }
+
   async getSession(ctx: RequestContext, token: string) {
     try {
       Logger.info("Getting session from token");
@@ -154,6 +191,7 @@ export class FirebaseAuthStrategy
     this.externalAuthenticationService = injector.get(
       ExternalAuthenticationService,
     );
+    this.roleService = injector.get(RoleService);
     this.sessionService = injector.get(SessionService);
     this.connection = injector.get(TransactionalConnection);
     this.options = injector.get(FIREBASE_AUTH_PLUGIN_OPTIONS);

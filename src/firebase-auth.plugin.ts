@@ -1,6 +1,6 @@
 import { PluginCommonModule, Type, VendurePlugin } from "@vendure/core";
 
-import { FIREBASE_AUTH_PLUGIN_OPTIONS } from "./constants";
+import { FIREBASE_AUTH_PLUGIN_OPTIONS, firebaseUser } from "./constants";
 import { FirebaseAuthOptions } from "./types";
 import { FirebaseAuthStrategy } from "./config/firebase-auth-strategy";
 import { ExternalAuthSessionResover } from "./api/external-auth-session.resolver";
@@ -22,6 +22,7 @@ import { shopApiExtensions } from "./api/api-extensions";
     config.authOptions.shopAuthenticationStrategy.push(
       new FirebaseAuthStrategy(),
     );
+    config.authOptions.customPermissions.push(firebaseUser);
     return config;
   },
   shopApiExtensions: {

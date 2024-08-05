@@ -42,12 +42,15 @@ The `FirebaseAuthPlugin` accepts the following options:
 
 - `serviceAccount`: The service account object for Firebase.
 - `databaseURL`: The Firebase database URL.
-- `allowNewUserRegistration`: A boolean to allow new user registrations.Creates a new user in the Vendure database if the user does not exist.
+- `registerCustomer`: true, //if email is present, create customer in Vendure
+- `registerUser`: true, //create user in Vendure without email
 
 
 ## Usage
 
 After setting up the plugin, you can use the `authenticate` mutation to authenticate a user using Firebase Auth.
+You can then use the `getSession` query to get the session of the currently authenticated user.
+
 
 ```graphql
 mutation{
@@ -59,6 +62,19 @@ mutation{
   }){
     __typename
   }
+}
+query{
+    getSession {
+      activeOrderId
+      cacheExpiry
+      expires
+      activeChannelId
+      user {
+        id
+        identifier
+        verified
+      }
+    }
 }
 ```
 ## Contributing
