@@ -1,6 +1,6 @@
 {
   "name": "vendure-plugin-firebase-auth",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Allows users to authenticate with Firebase Auth to Shop-API",
   "author": "ARRRRNY",
   "repository": "https://github.com/arrrrny/vendure-firebase-auth-plugin",
@@ -39,5 +39,11 @@
     "typescript": "5.3.3",
     "unplugin-swc": "^1.5.1",
     "vitest": "^2.0.4"
-  }
+  },
+  "keywords": [
+    "vendure",
+    "plugin",
+    "firebase",
+    "auth"
+  ]
 }

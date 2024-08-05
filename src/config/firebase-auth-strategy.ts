@@ -9,13 +9,14 @@ import {
   Logger,
   User,
   ExternalAuthenticationService,
+  SessionService,
 } from "@vendure/core";
 import * as admin from "firebase-admin";
-import { FirebaseAuthOptions } from "./types";
+import { FirebaseAuthOptions } from "../types";
 import { DocumentNode } from "graphql";
 import gql from "graphql-tag";
 import { DecodedIdToken } from "firebase-admin/auth";
-import { FIREBASE_AUTH_PLUGIN_OPTIONS } from "./constants";
+import { FIREBASE_AUTH_PLUGIN_OPTIONS } from "../constants";
 
 export interface FirebaseAuthData {
   jwt: string;
@@ -32,6 +33,7 @@ export class FirebaseAuthStrategy
   private options: FirebaseAuthOptions;
   readonly name = "firebase";
   private externalAuthenticationService: ExternalAuthenticationService;
+  private sessionService: SessionService;
 
   constructor() {}
   defineInputType(): DocumentNode {
@@ -42,6 +44,10 @@ export class FirebaseAuthStrategy
         """
         jwt: String!
         uid: String!
+      }
+
+      input FirebaseGetSessionInput {
+        token: String!
       }
     `;
   }
@@ -54,52 +60,59 @@ export class FirebaseAuthStrategy
       const decodedIdToken: DecodedIdToken = await admin
         .auth()
         .verifyIdToken(data.jwt);
-      if (decodedIdToken.uid == data.uid) {
-        const user = await this.externalAuthenticationService.findUser(
-          ctx,
-          this.name,
-          decodedIdToken.uid,
-        );
-        // const user = await this.connection.getRepository(ctx, User).findOne({
-        //   where: {
-        //     identifier: decodedIdToken.uid,
-        //   },
-        // });
-        if (user != null) {
-          return user;
-        } else {
-          if (decodedIdToken.email != null && this.options.registerCustomer) {
-            return await this.externalAuthenticationService.createCustomerAndUser(
-              ctx,
-              {
-                strategy: this.name,
-                externalIdentifier: decodedIdToken.uid,
-                verified: decodedIdToken.email_verified || false,
-                emailAddress: decodedIdToken.email,
-              },
-            );
-          }
-          if (this.options.registerUser) {
-            const newUser = new User();
-            newUser.identifier = decodedIdToken.uid;
-            newUser.verified = false;
-            const firebaseAuthMethod = await this.connection!.getRepository(
-              ctx,
-              ExternalAuthenticationMethod,
-            ).save(
-              new ExternalAuthenticationMethod({
-                strategy: this.name,
-                externalIdentifier: decodedIdToken.uid,
-              }),
-            );
-            newUser.authenticationMethods = [firebaseAuthMethod];
-            return await this.connection.getRepository(ctx, User).save(newUser);
-          }
-        }
-        return false;
-      } else {
+
+      if (decodedIdToken.uid != data.uid) {
         throw new Error("Invalid User Id");
       }
+
+      const user = await this.externalAuthenticationService.findUser(
+        ctx,
+        this.name,
+        decodedIdToken.uid,
+      );
+
+      if (user != null) {
+        Logger.info("User found in database. Returning user.");
+        return user;
+      }
+      if (this.options.registerCustomer) {
+        const firebaseUser = await admin.auth().getUser(data.uid);
+
+        if (
+          firebaseUser.email &&
+          firebaseUser.displayName &&
+          firebaseUser.displayName.split(" ").length > 1
+        ) {
+          return await this.externalAuthenticationService.createCustomerAndUser(
+            ctx,
+            {
+              strategy: this.name,
+              externalIdentifier: decodedIdToken.uid,
+              verified: firebaseUser.emailVerified || false,
+              emailAddress: firebaseUser.email,
+              firstName: firebaseUser.displayName.split(" ")[0],
+              lastName: firebaseUser.displayName.split(" ")[1],
+            },
+          );
+        }
+      }
+      if (this.options.registerUser) {
+        const newUser = new User();
+        newUser.identifier = decodedIdToken.uid;
+        const firebaseAuthMethod = await this.connection!.getRepository(
+          ctx,
+          ExternalAuthenticationMethod,
+        ).save(
+          new ExternalAuthenticationMethod({
+            strategy: this.name,
+            externalIdentifier: decodedIdToken.uid,
+          }),
+        );
+        newUser.authenticationMethods = [firebaseAuthMethod];
+        return await this.connection.getRepository(ctx, User).save(newUser);
+      }
+
+      return false;
     } catch (error) {
       if (error instanceof Error) {
         Logger.error(
@@ -116,15 +129,32 @@ export class FirebaseAuthStrategy
       return false;
     }
   }
-  // onLogOut?(ctx: RequestContext, user: User): Promise<void> {
-  //   throw new Error("Method not implemented.");
-  // }
+  async getSession(ctx: RequestContext, token: string) {
+    try {
+      Logger.info("Getting session from token");
+      return this.sessionService.getSessionFromToken(token);
+    } catch (error) {
+      if (error instanceof Error) {
+        Logger.error(
+          `Error authenticating with Firebase login: ${error.message}`,
+          loggerCtx,
+          error.stack,
+        );
+      } else {
+        Logger.error(
+          `Unknown error authenticating with Firebase login: ${String(error)}`,
+          loggerCtx,
+        );
+      }
+      return false;
+    }
+  }
 
   init(injector: Injector) {
     this.externalAuthenticationService = injector.get(
       ExternalAuthenticationService,
     );
-
+    this.sessionService = injector.get(SessionService);
     this.connection = injector.get(TransactionalConnection);
     this.options = injector.get(FIREBASE_AUTH_PLUGIN_OPTIONS);
 

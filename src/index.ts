@@ -9,4 +9,4 @@
  */
 export * from "./firebase-auth.plugin";
 export { FirebaseAuthOptions } from "./types";
-export { FirebaseAuthStrategy } from "./firebase-auth-strategy";
+export { FirebaseAuthStrategy } from "./config/firebase-auth-strategy";
